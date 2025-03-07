@@ -1,0 +1,96 @@
+package com.example.holatoast
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent { UIPrincipal() }
+    }
+}
+
+@Composable
+fun UIPrincipal() {
+    var cadTxtOp1 by remember { mutableStateOf("") }
+    var cadTxtOp2 by remember { mutableStateOf("") }
+    var cadTxtRes by remember { mutableStateOf("") }
+
+    fun btnLimpiar_click() {
+        cadTxtOp1 = ""
+        cadTxtOp2 = ""
+        cadTxtRes = ""
+    }
+
+    fun btnSumar_click() {
+        val op1 = cadTxtOp1.toIntOrNull() ?: 0
+        val op2 = cadTxtOp2.toIntOrNull() ?: 0
+        cadTxtRes = (op1 + op2).toString()
+    }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Top,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+            Text("Op1", Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Op2", Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Res", Modifier.weight(1f))
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceAround) {
+            TextField(
+                value = cadTxtOp1,
+                onValueChange = { cadTxtOp1 = it },
+                modifier = Modifier.weight(1f).padding(end = 8.dp)
+            )
+            Text(
+                "+",
+                Modifier.weight(0.2f).padding(horizontal = 4.dp).align(Alignment.CenterVertically)
+            )
+            TextField(
+                value = cadTxtOp2,
+                onValueChange = { cadTxtOp2 = it },
+                modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+            )
+            Text(
+                "=",
+                Modifier.weight(0.2f).padding(horizontal = 4.dp).align(Alignment.CenterVertically)
+            )
+            TextField(
+                value = cadTxtRes,
+                onValueChange = { cadTxtRes = it },
+                modifier = Modifier.weight(1f).padding(start = 8.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
+            Button(onClick = { btnLimpiar_click() }, Modifier.weight(1.5f)) {
+                Text("Limpiar")
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Button(onClick = { btnSumar_click() }, Modifier.weight(1.5f)) {
+                Text("Sumar")
+            }
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun Previsualizacion() {
+    UIPrincipal()
+}

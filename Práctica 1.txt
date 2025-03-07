@@ -1,0 +1,37 @@
+Fecha: 19 de febrero de 2025
+Práctica: 1
+Objetivo: Desarrollar un programa interactivo en Kotlin que permita al usuario realizar tres acciones principales:
+
+Sumar tres números.
+Ingresar y mostrar su nombre completo.
+Calcular el tiempo vivido desde su fecha de nacimiento, mostrando el resultado en distintas unidades de tiempo.
+Desarrollo del programa:
+Inicio del proyecto: Se comenzó creando las funciones principales para el programa:
+
+sumar(num1: Int, num2: Int, num3: Int): Int: Realiza la suma de tres números.
+ingresarNombreCompleto(scanner: Scanner): String: Solicita al usuario que ingrese su nombre completo.
+calcularTiempoVivido(scanner: Scanner): Calcula el tiempo vivido desde la fecha de nacimiento ingresada por el usuario. Para ello, se usa la clase LocalDate y sus métodos para calcular los días, meses, semanas, horas, minutos y segundos vividos.
+Interacción con el usuario: Se creó un menú interactivo que le permite al usuario elegir entre las opciones disponibles: realizar la suma de tres números, ingresar su nombre completo o calcular el tiempo vivido. El menú utiliza un bucle do-while que continúa mostrando las opciones hasta que el usuario elige salir (opción 4).
+
+Cálculo del tiempo vivido: El cálculo del tiempo vivido se hace en base a la fecha de nacimiento proporcionada por el usuario. Para la fecha, se utiliza DateTimeFormatter para definir el formato de entrada (dd/MM/yyyy), y luego se calcula la diferencia entre la fecha de nacimiento y la fecha actual usando ChronoUnit.DAYS.between(), ChronoUnit.MONTHS.between(), y otros métodos. Los resultados se muestran en meses, semanas, días, horas, minutos y segundos.
+
+Errores encontrados y soluciones:
+Error de formato de fecha:
+
+Problema: Al principio, el código no manejaba correctamente el formato de entrada de la fecha. Si el usuario ingresaba una fecha incorrecta, el programa se caía o no mostraba la salida esperada.
+Solución: Se implementó un bloque try-catch para capturar errores al momento de parsear la fecha y mostrar un mensaje de error claro si el formato era incorrecto. El formato de fecha aceptado se estableció como dd/MM/yyyy usando DateTimeFormatter.ofPattern("dd/MM/yyyy").
+
+Problema con el buffer de Scanner:
+
+Problema: Al leer números enteros con scanner.nextInt(), después al leer cadenas con scanner.nextLine(), se producía un salto de línea no deseado que causaba que el nextLine() para el nombre completo fallara y devolviera un valor vacío.
+Solución: Después de leer un entero con nextInt(), se utilizó scanner.nextLine() para limpiar el buffer de entrada y permitir que el siguiente nextLine() funcione correctamente.
+
+Falta de validación de entradas:
+
+Problema: El programa no validaba si los números ingresados por el usuario eran válidos para la operación de suma.
+Solución: Aunque no se implementó una validación robusta de números, el código fue ajustado para asegurar que las entradas fueran leídas correctamente. Se puede mejorar agregando validaciones adicionales en el futuro para verificar que las entradas sean de tipo entero.
+
+Problemas de legibilidad del formato de fecha:
+
+Problema: La salida de la fecha de nacimiento no estaba en un formato amigable para el usuario (se mostraba en formato ISO yyyy-MM-dd).
+Solución: Se implementó un formateador de salida con DateTimeFormatter.ofPattern("dd MMMM yyyy") para mostrar la fecha de nacimiento de manera más comprensible, como por ejemplo "22 febrero 2025".
