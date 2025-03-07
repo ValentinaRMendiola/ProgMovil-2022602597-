@@ -1,0 +1,110 @@
+PRACTICA 1 KOTLIN
+
+
+import java.time.*
+import java.time.temporal.ChronoUnit
+import java.time.format.DateTimeFormatter
+import java.util.Scanner
+
+fun sumar(num1: Int, num2: Int, num3: Int): Int {
+    return num1 + num2 + num3
+}
+
+fun ingresarNombreCompleto(scanner: Scanner): String {
+    println("\nNOMBRE COMPLETO")
+    println("\nIngresa tu nombre completo:\n ")
+    return scanner.nextLine()
+}
+
+fun calcularTiempoVivido(scanner: Scanner) {
+    println("\nTIEMPO VIVIDO")
+    println("\nIngrese su fecha de nacimiento (dd/MM/yyyy):\n ")
+    val fechaNacimiento = scanner.nextLine()
+
+    try {
+        
+        val formatterEntrada = DateTimeFormatter.ofPattern("dd/MM/yyyy")
+        val fechaNac = LocalDate.parse(fechaNacimiento, formatterEntrada)
+
+        
+        val formatterSalida = DateTimeFormatter.ofPattern("dd MMMM yyyy")
+
+        val fechaActual = LocalDate.now()
+        val periodo = Period.between(fechaNac, fechaActual)
+
+        val diasVividos = ChronoUnit.DAYS.between(fechaNac, fechaActual)
+        val mesesVividos = ChronoUnit.MONTHS.between(fechaNac, fechaActual)
+        val semanasVividas = diasVividos / 7
+        val horasVividas = diasVividos * 24
+        val minutosVividos = horasVividas * 60
+        val segundosVividos = minutosVividos * 60
+
+        println("\nFecha de nacimiento: ${fechaNac.format(formatterSalida)}")
+        println("Tiempo vivido desde tu nacimiento:")
+        println("Meses: $mesesVividos")
+        println("Semanas: $semanasVividas")
+        println("Días: $diasVividos")
+        println("Horas: $horasVividas")
+        println("Minutos: $minutosVividos")
+        println("Segundos: $segundosVividos")
+        
+    } catch (e: Exception) {
+        println("\nError: La fecha ingresada no es válida. Asegúrese de usar el formato 'dd/MM/yyyy'.")
+    }
+}
+
+fun main() {
+    val scanner = Scanner(System.`in`)
+    var opcion: Int
+
+    do {
+        
+        println("\n\nMenú")
+        println("Selecciona una opción:")
+        println("1. Suma de tres números")
+        println("2. Nombre completo")
+        println("3. Tiempo vivido")
+        println("4. Salir")
+        print("\nOpción: ")
+        opcion = scanner.nextInt()
+
+       
+        scanner.nextLine()
+
+        when (opcion) {
+            1 -> {
+                
+                println("\nSUMA DE TRES NUMEROS")
+                print("Ingresa el primer número: ")
+                val num1 = scanner.nextInt()
+                print("\nIngresa el segundo número: ")
+                val num2 = scanner.nextInt()
+                print("\nIngresa el tercer número: ")
+                val num3 = scanner.nextInt()
+
+               
+                val resultado = sumar(num1, num2, num3)
+                println("\nLa suma de los tres números es: $resultado")
+            }
+            2 -> {
+                
+                val nombreCompleto = ingresarNombreCompleto(scanner)
+                println("\nEl nombre completo es: $nombreCompleto")
+            }
+            3 -> {
+                
+                calcularTiempoVivido(scanner)
+            }
+            4 -> {
+                
+                println("¡Hasta luego!")
+            }
+            else -> {
+                println("Opción no válida. Por favor, selecciona una opción correcta.")
+            }
+        }
+
+    } while (opcion != 4) 
+
+    scanner.close()
+}
