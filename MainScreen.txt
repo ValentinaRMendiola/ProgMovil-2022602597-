@@ -1,0 +1,286 @@
+package com.example.pruebas
+
+import android.content.Context
+import android.widget.Toast
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.navigation.NavController
+
+@Composable
+fun MainScreen(navController: NavController, dbHelper: DBHelper) {
+    val context = LocalContext.current
+
+    var productos by remember { mutableStateOf(dbHelper.getAllProductos()) }
+    var showDialog by remember { mutableStateOf(false) }
+    var selectedProducto by remember { mutableStateOf<Producto?>(null) }
+
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var productoAEliminar by remember { mutableStateOf<Producto?>(null) }
+
+    val prefs = context.getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
+
+    var bgColor by remember { mutableStateOf(Color.White) }
+    var buttonColor by remember { mutableStateOf(Color.Blue) }
+    var textColor by remember { mutableStateOf(Color.Black) }
+
+    LaunchedEffect(Unit) {
+        bgColor = Color(
+            prefs.getFloat("bg_red", 1f),
+            prefs.getFloat("bg_green", 1f),
+            prefs.getFloat("bg_blue", 1f)
+        )
+
+        buttonColor = Color(
+            prefs.getFloat("btn_red", 0.38f),
+            prefs.getFloat("btn_green", 0.12f),
+            prefs.getFloat("btn_blue", 0.93f)
+        )
+
+        textColor = Color(
+            prefs.getFloat("text_red", 0f),
+            prefs.getFloat("text_green", 0f),
+            prefs.getFloat("text_blue", 0f)
+        )
+    }
+
+    if (showDialog && selectedProducto != null) {
+        ModificarProductoDialog(
+            producto = selectedProducto!!,
+            onDismiss = { showDialog = false },
+            onSave = { productoModificado ->
+                dbHelper.modificarProducto(productoModificado)
+                productos = dbHelper.getAllProductos()
+                showDialog = false
+            }
+        )
+    }
+
+    if (showDeleteDialog && productoAEliminar != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Confirmar eliminación") },
+            text = { Text("¿Estás seguro de que deseas eliminar este producto?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        dbHelper.eliminarProducto(productoAEliminar!!.id_producto)
+                        productos = dbHelper.getAllProductos()
+                        showDeleteDialog = false
+                        Toast.makeText(navController.context, "Producto eliminado", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(contentColor = textColor)
+                ) {
+                    Text("Sí")
+                }
+            },
+            dismissButton = {
+                Button(
+                    onClick = {
+                        showDeleteDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(contentColor = textColor)
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    // Lista de productos
+    LazyColumn(modifier = Modifier
+        .fillMaxSize()
+        .padding(8.dp)) {
+        items(productos) { producto ->
+            Box(
+                modifier = Modifier
+                    .background(bgColor)
+                    .padding(12.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .padding(12.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    producto.imagen?.let { base64 ->
+                        dbHelper.base64ToBitmap(base64)?.let { bitmap ->
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = "Imagen",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(150.dp)
+                            )
+                        }
+                    }
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(producto.nombre, style = MaterialTheme.typography.bodyLarge.copy(color = textColor))
+                        Text("${producto.precio}", style = MaterialTheme.typography.bodyMedium.copy(color = textColor))
+                        Text(producto.descripcion ?: "Sin descripción", style = MaterialTheme.typography.bodySmall.copy(color = textColor))
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        Button(
+                            onClick = {
+                                selectedProducto = producto
+                                showDialog = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = buttonColor, contentColor = textColor)
+                        ) {
+                            Text("Modificar ✏️")
+                        }
+
+                        Button(
+                            onClick = {
+                                productoAEliminar = producto
+                                showDeleteDialog = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = buttonColor, contentColor = textColor)
+                        ) {
+                            Text("Eliminar 🗑️")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ModificarProductoDialog(
+    producto: Producto,
+    onDismiss: () -> Unit,
+    onSave: (Producto) -> Unit
+) {
+    var nombre by remember { mutableStateOf(producto.nombre) }
+    var precio by remember { mutableStateOf(producto.precio.toString()) }
+    var descripcion by remember { mutableStateOf(producto.descripcion ?: "") }
+
+    var errorNombre by remember { mutableStateOf("") }
+    var errorPrecio by remember { mutableStateOf("") }
+    var errorDescripcion by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Modificar Producto") },
+        text = {
+            Column {
+                TextField(
+                    value = nombre,
+                    onValueChange = {
+                        nombre = it
+                        errorNombre = ""
+                    },
+                    label = { Text("Nombre") },
+                    isError = errorNombre.isNotEmpty()
+                )
+
+                if (errorNombre.isNotEmpty()) {
+                    Text(
+                        text = errorNombre,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+
+                TextField(
+                    value = precio,
+                    onValueChange = {
+                        precio = it
+                        errorPrecio = ""
+                    },
+                    label = { Text("Precio") },
+                    keyboardOptions = KeyboardOptions.Default.copy(keyboardType = KeyboardType.Number),
+                    isError = errorPrecio.isNotEmpty()
+                )
+
+                if (errorPrecio.isNotEmpty()) {
+                    Text(
+                        text = errorPrecio,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+
+                TextField(
+                    value = descripcion,
+                    onValueChange = {
+                        descripcion = it
+                        errorDescripcion = ""
+                    },
+                    label = { Text("Descripción") },
+                    isError = errorDescripcion.isNotEmpty()
+                )
+
+                if (errorDescripcion.isNotEmpty()) {
+                    Text(
+                        text = errorDescripcion,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    var valid = true
+
+                    if (nombre.isBlank()) {
+                        errorNombre = "El nombre no puede estar vacío"
+                        valid = false
+                    }
+
+                    val precioDouble = precio.toDoubleOrNull()
+                    if (precioDouble == null || precioDouble < 0) {
+                        errorPrecio = "El precio debe ser un número válido y no puede ser negativo"
+                        valid = false
+                    }
+
+                    if (descripcion.isBlank()) {
+                        errorDescripcion = "La descripción no puede estar vacía"
+                        valid = false
+                    }
+
+                    if (valid) {
+                        val productoModificado = producto.copy(
+                            nombre = nombre,
+                            precio = precioDouble ?: producto.precio,
+                            descripcion = descripcion
+                        )
+                        onSave(productoModificado)
+                    }
+                }
+            ) {
+                Text("Guardar")
+            }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}

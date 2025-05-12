@@ -1,0 +1,9 @@
+package com.example.pruebas
+
+data class Producto(
+   val id_producto: Long,
+   val nombre: String,
+   val precio: Double,
+   val descripcion: String?,
+   val imagen: String?
+)

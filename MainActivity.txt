@@ -1,0 +1,155 @@
+package com.example.pruebas
+
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Bundle
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
+import androidx.navigation.compose.*
+import com.example.pruebas.ui.theme.PruebasTheme
+
+class MainActivity : ComponentActivity() {
+
+    private val PERMISSION_REQUEST_CODE = 1001
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val dbHelper = DBHelper(this)
+
+        checkAndRequestPermissions()
+
+        setContent {
+            PruebasTheme {
+                val navController = rememberNavController()
+                var menuExpanded by remember { mutableStateOf(false) }
+
+                var showTopBar by remember { mutableStateOf(true) }
+                val currentRoute = navController.currentBackStackEntryAsState()
+
+                LaunchedEffect(currentRoute.value?.destination?.route) {
+                    showTopBar = currentRoute.value?.destination?.route == "main"
+                }
+
+                Scaffold(
+                    topBar = {
+                        if (showTopBar) {
+                            TopAppBar(
+                                title = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Home,
+                                            contentDescription = "Inicio",
+                                            modifier = Modifier.padding(end = 8.dp)
+                                        )
+                                        Text("Productos")
+                                    }
+                                },
+                                actions = {
+                                    IconButton(onClick = { menuExpanded = true }) {
+                                        Icon(Icons.Default.MoreVert, contentDescription = "Menú")
+                                    }
+                                    DropdownMenu(
+                                        expanded = menuExpanded,
+                                        onDismissRequest = { menuExpanded = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Agregar producto") },
+                                            leadingIcon = {
+                                                Icon(Icons.Default.Add, contentDescription = "Agregar Producto")
+                                            },
+                                            onClick = {
+                                                menuExpanded = false
+                                                navController.navigate("Agregar")
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Personalización") },
+                                            leadingIcon = {
+                                                Icon(Icons.Default.Settings, contentDescription = "Personalización")
+                                            },
+                                            onClick = {
+                                                menuExpanded = false
+                                                navController.navigate("ColorSettings")
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Ayuda") },
+                                            leadingIcon = {
+                                                Icon(Icons.Default.Info, contentDescription = "Ayuda")
+                                            },
+                                            onClick = {
+                                                menuExpanded = false
+                                                navController.navigate("Help")
+                                            }
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    }
+                ) { innerPadding ->
+                    NavHost(
+                        navController = navController,
+                        startDestination = "main",
+                        modifier = Modifier.padding(innerPadding)
+                    ) {
+                        composable("main") {
+                            MainScreen(navController = navController, dbHelper = dbHelper)
+                        }
+                        composable("Agregar") {
+                            PantallaAgregar(navController = navController, dbHelper = dbHelper)
+                        }
+                        composable("ColorSettings") {
+                            ColorSettingsScreen(navController = navController)
+                        }
+                        composable("Help") {
+                            HelpScreen(navController = navController)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun checkAndRequestPermissions() {
+        val permissionsNeeded = mutableListOf<String>()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED)
+            permissionsNeeded.add(Manifest.permission.CAMERA)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
+            permissionsNeeded.add(Manifest.permission.RECORD_AUDIO)
+
+        if (permissionsNeeded.isNotEmpty()) {
+            ActivityCompat.requestPermissions(
+                this,
+                permissionsNeeded.toTypedArray(),
+                PERMISSION_REQUEST_CODE
+            )
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            val allGranted = grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+            val message = if (allGranted) "Permisos concedidos" else "Permisos denegados"
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+}

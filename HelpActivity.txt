@@ -1,0 +1,173 @@
+package com.example.pruebas
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import kotlinx.coroutines.delay
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HelpScreen(navController: NavController) {
+    var showContent by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        delay(300)
+        showContent = true
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Ayuda",
+                        style = MaterialTheme.typography.headlineLarge.copy(fontSize = 30.sp),
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            )
+        }
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.background,
+                            MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    )
+                )
+                .padding(innerPadding)
+        ) {
+            AnimatedVisibility(visible = showContent) {
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState())
+                        .fillMaxSize()
+                ) {
+
+                    Text(
+                        text = "Bienvenido a la aplicación de gestión de productos. A continuación, te explicamos las principales funciones de la aplicación para que puedas sacarle el máximo provecho:",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier
+                            .padding(bottom = 16.dp)
+                            .fillMaxWidth(),
+                        textAlign = TextAlign.Justify
+                    )
+
+                    HelpCard(
+                        title = "Pantalla Principal",
+                        icon = Icons.Default.Home,
+                        content = listOf(
+                            "Al abrir la aplicación, verás la pantalla principal donde se encuentran todos los productos que has agregado. Desde esta pantalla, podrás realizar las siguientes acciones:",
+                            "Modificar Producto: Puedes editar el nombre, precio y descripción de cualquier producto, aunque la imagen no puede modificarse una vez guardada.",
+                            "Eliminar Producto: Si deseas eliminar un producto, puedes hacerlo completamente desde la pantalla principal."
+                        )
+                    )
+
+                    HelpCard(
+                        title = "Menú Principal",
+                        icon = Icons.Default.MoreVert,
+                        content = listOf(
+                            "En la parte superior de la pantalla principal, encontrarás un menú con dos opciones:",
+                            "Agregar Producto: Accede a un formulario para agregar un nuevo producto a la aplicación.",
+                            "Personalización: Cambia el diseño y los colores de la aplicación."
+                        )
+                    )
+
+                    HelpCard(
+                        title = "Agregar un Producto",
+                        icon = Icons.Default.Add,
+                        content = listOf(
+                            "Formulario de producto: Completa los campos de nombre, precio y descripción del producto.",
+                            "Imagen: Puedes tomar una foto del producto con la cámara de la app o seleccionar una imagen desde la galería de tu dispositivo. Si la imagen no es la correcta, puedes eliminarla y cargar una nueva.",
+                            "Guardar: Una vez completado el formulario, presiona el botón Guardar y el producto aparecerá en la pantalla principal."
+                        )
+                    )
+
+                    HelpCard(
+                        title = "Pantalla de Personalización",
+                        icon = Icons.Default.Settings,
+                        content = listOf(
+                            "En esta pantalla podrás personalizar el aspecto de la aplicación:",
+                            "Colores: Cambia el color de fondo donde se encuentran los productos, el color de los botones y el color de las letras (nombre, precio, descripción y botones).",
+                            "Vista previa: Los cambios que realices se mostrarán en tiempo real, para que puedas ver cómo quedarán antes de aplicarlos en la pantalla principal.",
+                            "Reestablecer: Si los cambios realizados no son de tu agrado, puedes presionar el botón Reestablecer para regresar los colores predeterminados de la aplicación."
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Button(
+                        onClick = { navController.popBackStack() },
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .padding(12.dp),
+                        shape = MaterialTheme.shapes.medium,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Volver")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Volver", color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun HelpCard(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, content: List<String>) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.primary)
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            content.forEach {
+                Text(
+                    text = "• $it",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .padding(bottom = 4.dp)
+                        .fillMaxWidth(),
+                    textAlign = TextAlign.Justify
+                )
+            }
+        }
+    }
+}
