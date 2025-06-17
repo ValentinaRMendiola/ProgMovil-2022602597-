@@ -1,0 +1,187 @@
+package com.example.proyectolibros
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HelpScreen(onVolver: () -> Unit) {
+    var showContent by remember { mutableStateOf(false) }
+
+    // Manejo del botón "Atrás" del sistema
+    BackHandler {
+        onVolver()
+    }
+
+    LaunchedEffect(Unit) {
+        delay(300)
+        showContent = true
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        text = "Ayuda",
+                        style = MaterialTheme.typography.headlineLarge.copy(fontSize = 30.sp),
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            )
+        }
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.background,
+                            MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    )
+                )
+                .padding(innerPadding)
+        ) {
+            AnimatedVisibility(visible = showContent) {
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState())
+                        .fillMaxSize()
+                ) {
+
+                    Text(
+                        text = "Bienvenido a tu biblioteca digital. A continuación, te explicamos cómo usar cada función de la aplicación para que aproveches al máximo todas sus herramientas:",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier
+                            .padding(bottom = 16.dp)
+                            .fillMaxWidth(),
+                        textAlign = TextAlign.Justify
+                    )
+
+                    HelpCard(
+                        title = "Pantalla Principal",
+                        icon = Icons.Default.Home,
+                        content = listOf(
+                            "Muestra todos los libros que has cargado.",
+                            "Cada libro incluye: título, autor, género, descripción, fecha de publicación, imagen y enlace al PDF.",
+                            "Los libros más recientes se muestran al inicio.",
+                            "Puedes editar o eliminar cualquier libro.",
+                            "Toca el ícono de corazón para marcar o desmarcar como favorito."
+                        )
+                    )
+
+                    HelpCard(
+                        title = "Agregar Libro",
+                        icon = Icons.Default.Add,
+                        content = listOf(
+                            "Accede al formulario desde el menú desplegable.",
+                            "Ingresa los siguientes datos: título, autor, descripción, fecha de publicación, URL de imagen, URL del PDF y género.",
+                            "Guarda el libro y aparecerá automáticamente en la pantalla principal."
+                        )
+                    )
+
+                    HelpCard(
+                        title = "Buscar y Filtrar",
+                        icon = Icons.Default.Search,
+                        content = listOf(
+                            "Desde el menú puedes acceder a la función de búsqueda.",
+                            "Filtra libros por título, autor o género para encontrar fácilmente lo que buscas.",
+                            "Ideal para colecciones grandes o específicas."
+                        )
+                    )
+
+                    HelpCard(
+                        title = "Favoritos",
+                        icon = Icons.Default.Favorite,
+                        content = listOf(
+                            "En esta sección encontrarás todos los libros que hayas marcado como favoritos.",
+                            "Accede rápidamente a tus lecturas preferidas desde esta pantalla."
+                        )
+                    )
+
+                    HelpCard(
+                        title = "Personalización",
+                        icon = Icons.Default.Settings,
+                        content = listOf(
+                            "Cambia el color de fondo y los botones de la aplicación según tu gusto.",
+                            "Guarda tu configuración personalizada para que se aplique en toda la app."
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Button(
+                        onClick = { onVolver()},
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .padding(12.dp),
+                        shape = MaterialTheme.shapes.medium,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Volver")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Volver", color = Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun HelpCard(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, content: List<String>) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.primary)
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            content.forEach {
+                Text(
+                    text = "• $it",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .padding(bottom = 4.dp)
+                        .fillMaxWidth(),
+                    textAlign = TextAlign.Justify
+                )
+            }
+        }
+    }
+}

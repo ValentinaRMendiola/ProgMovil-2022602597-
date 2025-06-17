@@ -1,0 +1,132 @@
+package com.example.proyectolibros
+
+import android.content.ContentValues
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteOpenHelper
+import java.text.SimpleDateFormat
+import java.util.*
+
+class DBHelper(context: Context) : SQLiteOpenHelper(context, "mibase.db", null, 1) {
+
+    override fun onCreate(db: SQLiteDatabase) {
+        val createTable = """
+            CREATE TABLE IF NOT EXISTS libros (
+                id TEXT PRIMARY KEY,
+                titulo TEXT,
+                autor TEXT,
+                descripcion TEXT,
+                fecha_publicacion TEXT,
+                fecha_modificacion TEXT,
+                eliminado INTEGER,
+                url_imagen TEXT,
+                url_pdf TEXT,
+                genero TEXT
+            )
+        """.trimIndent()
+        db.execSQL(createTable)
+    }
+
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        db.execSQL("DROP TABLE IF EXISTS libros")
+        onCreate(db)
+    }
+
+    fun insertarLibro(
+        id: String,
+        titulo: String,
+        autor: String,
+        descripcion: String,
+        fechaPublicacion: String,
+        fechaModificacion: String,
+        eliminado: Int,
+        urlImagen: String,
+        urlPdf: String,
+        genero: String
+    ): Long {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put("id", id)
+            put("titulo", titulo)
+            put("autor", autor)
+            put("descripcion", descripcion)
+            put("fecha_publicacion", fechaPublicacion)
+            put("fecha_modificacion", fechaModificacion)
+            put("eliminado", eliminado)
+            put("url_imagen", urlImagen)
+            put("url_pdf", urlPdf)
+            put("genero", genero)
+        }
+        return db.insertWithOnConflict("libros", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+    }
+
+    fun actualizarLibro(
+        id: String,
+        titulo: String,
+        autor: String,
+        descripcion: String,
+        fechaPublicacion: String,
+        fechaModificacion: String,
+        eliminado: Int,
+        urlImagen: String,
+        urlPdf: String,
+        genero: String
+    ): Int {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put("titulo", titulo)
+            put("autor", autor)
+            put("descripcion", descripcion)
+            put("fecha_publicacion", fechaPublicacion)
+            put("fecha_modificacion", fechaModificacion)
+            put("eliminado", eliminado)
+            put("url_imagen", urlImagen)
+            put("url_pdf", urlPdf)
+            put("genero", genero)
+        }
+        return db.update("libros", values, "id = ?", arrayOf(id))
+    }
+
+    fun insertarOActualizarLibro(
+        id: String,
+        titulo: String,
+        autor: String,
+        descripcion: String,
+        fechaPublicacion: String,
+        fechaModificacion: String,
+        eliminado: Int,
+        urlImagen: String,
+        urlPdf: String,
+        genero: String
+    ) {
+        val db = writableDatabase
+        val cursor = db.query("libros", arrayOf("id"), "id = ?", arrayOf(id), null, null, null)
+        val exists = cursor.moveToFirst()
+        cursor.close()
+
+        if (exists) {
+            actualizarLibro(id, titulo, autor, descripcion, fechaPublicacion, fechaModificacion, eliminado, urlImagen, urlPdf, genero)
+        } else {
+            insertarLibro(id, titulo, autor, descripcion, fechaPublicacion, fechaModificacion, eliminado, urlImagen, urlPdf, genero)
+        }
+
+        db.close()
+    }
+
+    fun eliminarLogicamenteLibro(id: String): Int {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put("eliminado", 1)
+            put("fecha_modificacion", obtenerFechaHoraActual())
+        }
+        val result = db.update("libros", values, "id = ?", arrayOf(id))
+        db.close()
+        return result
+    }
+
+    private fun obtenerFechaHoraActual(): String {
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+        return sdf.format(Date())
+    }
+
+}

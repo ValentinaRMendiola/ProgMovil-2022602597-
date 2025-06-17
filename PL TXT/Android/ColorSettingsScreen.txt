@@ -1,0 +1,232 @@
+package com.example.proyectolibros
+
+import android.content.Context
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+
+fun getContrastingTextColor(color: Color): Color {
+    val luminance = 0.299 * color.red + 0.587 * color.green + 0.114 * color.blue
+    return if (luminance > 0.5) Color.Black else Color.White
+}
+
+@Composable
+fun ColorSettingsScreen(onVolver: () -> Unit) {
+    val context = LocalContext.current
+    val prefs = context.getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
+
+    var bgRed by remember { mutableStateOf(1f) }
+    var bgGreen by remember { mutableStateOf(1f) }
+    var bgBlue by remember { mutableStateOf(1f) }
+
+    var btnRed by remember { mutableStateOf(0.38f) }
+    var btnGreen by remember { mutableStateOf(0.12f) }
+    var btnBlue by remember { mutableStateOf(0.93f) }
+
+    BackHandler {
+        onVolver()
+    }
+
+    LaunchedEffect(Unit) {
+        bgRed = prefs.getFloat("bg_red", 1f)
+        bgGreen = prefs.getFloat("bg_green", 1f)
+        bgBlue = prefs.getFloat("bg_blue", 1f)
+
+        btnRed = prefs.getFloat("btn_red", 0.38f)
+        btnGreen = prefs.getFloat("btn_green", 0.12f)
+        btnBlue = prefs.getFloat("btn_blue", 0.93f)
+    }
+
+    val backgroundColor = Color(bgRed, bgGreen, bgBlue)
+    val buttonColor = Color(btnRed, btnGreen, btnBlue)
+
+    val textColor = getContrastingTextColor(backgroundColor)
+    val buttonTextColor = getContrastingTextColor(buttonColor)
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(backgroundColor)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { onVolver() }) {
+                        Icon(
+                            imageVector = Icons.Filled.ArrowBack,
+                            contentDescription = "Volver",
+                            tint = textColor
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Box(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Personalización",
+                            fontSize = 28.sp, // Un poco más grande
+                            color = textColor,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(end = 48.dp)
+                        )
+                    }
+                }
+            }
+
+            Text(
+                text = "Color de fondo",
+                fontSize = 20.sp, // más grande
+                color = textColor
+            )
+
+            ColorSliders(
+                red = bgRed,
+                green = bgGreen,
+                blue = bgBlue,
+                labelColor = textColor
+            ) { r, g, b ->
+                bgRed = r
+                bgGreen = g
+                bgBlue = b
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Color de botones",
+                fontSize = 20.sp, // igual tamaño que "Color de fondo"
+                color = textColor
+            )
+
+            ColorSliders(
+                red = btnRed,
+                green = btnGreen,
+                blue = btnBlue,
+                labelColor = textColor
+            ) { r, g, b ->
+                btnRed = r
+                btnGreen = g
+                btnBlue = b
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = {
+                    with(prefs.edit()) {
+                        putFloat("bg_red", bgRed)
+                        putFloat("bg_green", bgGreen)
+                        putFloat("bg_blue", bgBlue)
+                        putFloat("btn_red", btnRed)
+                        putFloat("btn_green", btnGreen)
+                        putFloat("btn_blue", btnBlue)
+                        apply()
+                    }
+                    Toast.makeText(context, "Colores guardados", Toast.LENGTH_SHORT).show()
+                    onVolver()
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = buttonColor,
+                    contentColor = buttonTextColor
+                ),
+                modifier = Modifier
+                    .padding(horizontal = 8.dp)
+                    .weight(1f),
+                contentPadding = PaddingValues(vertical = 16.dp)
+            ) {
+                Text("Guardar", fontSize = 16.sp) // tamaño botón se mantiene
+            }
+
+            Button(
+                onClick = {
+                    bgRed = 1f; bgGreen = 1f; bgBlue = 1f
+                    btnRed = 0.38f; btnGreen = 0.12f; btnBlue = 0.93f
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = buttonColor,
+                    contentColor = buttonTextColor
+                ),
+                modifier = Modifier
+                    .padding(horizontal = 8.dp)
+                    .weight(1f),
+                contentPadding = PaddingValues(vertical = 16.dp)
+            ) {
+                Text("Reestablecer", fontSize = 16.sp) // tamaño botón se mantiene
+            }
+        }
+    }
+}
+
+@Composable
+fun ColorSliders(
+    red: Float,
+    green: Float,
+    blue: Float,
+    labelColor: Color,
+    onColorChange: (Float, Float, Float) -> Unit
+) {
+    Column(modifier = Modifier.padding(vertical = 6.dp)) { // un poco más espacio vertical
+        Text("Rojo: ${"%.2f".format(red)}", fontSize = 20.sp, color = labelColor) // más grande
+        Slider(
+            value = red,
+            onValueChange = { onColorChange(it, green, blue) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(30.dp) // más alto slider
+        )
+
+        Text("Verde: ${"%.2f".format(green)}", fontSize = 20.sp, color = labelColor)
+        Slider(
+            value = green,
+            onValueChange = { onColorChange(red, it, blue) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(30.dp)
+        )
+
+        Text("Azul: ${"%.2f".format(blue)}", fontSize = 20.sp, color = labelColor)
+        Slider(
+            value = blue,
+            onValueChange = { onColorChange(red, green, it) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(30.dp)
+        )
+    }
+}
+

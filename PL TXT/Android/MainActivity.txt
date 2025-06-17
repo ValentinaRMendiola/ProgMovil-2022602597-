@@ -1,0 +1,679 @@
+package com.example.proyectolibros
+
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import android.util.Patterns
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.http.*
+
+interface LibroApi {
+    @GET("ver_libro.php")
+    suspend fun getLibros(): List<Libro>
+}
+
+interface EliminarLibroApi {
+    @GET("eliminar_libro.php")
+    suspend fun eliminarLibro(@Query("id") id: String): retrofit2.Response<Unit>
+}
+
+interface ModificarLibroApi {
+    @POST("modificar_libro.php")
+    suspend fun modificarLibro(@Body libro: Libro): retrofit2.Response<Unit>
+}
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            MaterialTheme {
+                AppNavigation()
+            }
+        }
+    }
+}
+
+@Composable
+fun AppNavigation() {
+    var currentScreen by remember { mutableStateOf("listar") }
+    var todosLosLibros by remember { mutableStateOf<List<Libro>>(emptyList()) }
+
+    when (currentScreen) {
+        "agregar" -> LibroForm(onVolver = { currentScreen = "listar" })
+        "filtrar" -> PantallaFiltrarLibros(onVolver = { currentScreen = "listar" })
+        "favoritos" -> PantallaFavoritos(todosLosLibros = todosLosLibros, baseUrl = Constantes.BASE_URL, onVolver = { currentScreen = "listar" })
+        "personalizacion" -> ColorSettingsScreen(onVolver = { currentScreen = "listar"})
+        "ayuda" -> HelpScreen(onVolver = { currentScreen = "listar"})
+        else -> ListaLibros(
+            onAgregarLibro = { currentScreen = "agregar" },
+            onFiltrarLibros = { currentScreen = "filtrar" },
+            onFavoritos = { currentScreen = "favoritos" },
+            guardarLibros = { todosLosLibros = it }, // Para que favoritos tenga acceso
+            onPersonalizacion = { currentScreen = "personalizacion" },
+            onAyuda = { currentScreen = "ayuda" },
+        )
+    }
+}
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ListaLibros(onAgregarLibro: () -> Unit,
+                onFiltrarLibros: () -> Unit,
+                onPersonalizacion: () -> Unit,
+                onAyuda: () -> Unit,
+                onFavoritos: () -> Unit,
+                guardarLibros: (List<Libro>) -> Unit) {
+    var libros by remember { mutableStateOf<List<Libro>>(emptyList()) }
+    var expanded by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    var libroAEliminar by remember { mutableStateOf<Libro?>(null) }
+
+    var libroAEditar by remember { mutableStateOf<Libro?>(null) }
+    var tituloEditar by remember { mutableStateOf("") }
+    var autorEditar by remember { mutableStateOf("") }
+    var descripcionEditar by remember { mutableStateOf("") }
+    var urlImagenEditar by remember { mutableStateOf("") }
+    var urlPdfEditar by remember { mutableStateOf("") }
+    var generoEditar by remember { mutableStateOf("") }        // <-- Agregado
+
+    // Variables de error para validaciones
+    var tituloError by remember { mutableStateOf(false) }
+    var autorError by remember { mutableStateOf(false) }
+    var descripcionError by remember { mutableStateOf(false) }
+    var urlImagenError by remember { mutableStateOf(false) }
+    var urlPdfError by remember { mutableStateOf(false) }
+    var generoError by remember { mutableStateOf(false) }      // <-- Agregado
+
+    val scope = rememberCoroutineScope()
+    val baseUrl = Constantes.BASE_URL
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        scope.launch {
+            try {
+                val retrofit = Retrofit.Builder()
+                    .baseUrl("$baseUrl/")
+                    .addConverterFactory(GsonConverterFactory.create())
+                    .build()
+                val api = retrofit.create(LibroApi::class.java)
+                val librosObtenidos = api.getLibros()
+
+                // Ordenar por fecha descendente (más reciente primero)
+                libros = librosObtenidos.sortedByDescending { libro ->
+                    libro.Fecha_publicacion ?: ""
+                }
+
+                guardarLibros(libros)
+                errorMessage = null
+            } catch (e: Exception) {
+                errorMessage = "Error al cargar libros: ${e.localizedMessage}"
+            }
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "\uD83D\uDCD6", // Emoji de libro abierto 📖
+                            fontSize = 24.sp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Libros")
+                    }
+                },
+                actions = {
+                    Box {
+                        IconButton(onClick = { expanded = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Menú")
+                        }
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "\u2795", // Símbolo de suma ➕
+                                            fontSize = 18.sp,
+                                            modifier = Modifier.padding(end = 8.dp)
+                                        )
+                                        Text("Agregar libro")
+                                    }
+                                },
+                                onClick = {
+                                    expanded = false
+                                    onAgregarLibro()
+                                }
+                            )
+
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "\u26B0", // Símbolo de filtro (embudo) ⚰️ (No es embudo real, pero cercano)
+                                            fontSize = 18.sp,
+                                            modifier = Modifier.padding(end = 8.dp)
+                                        )
+                                        Text("Filtrar libros")
+                                    }
+                                },
+                                onClick = {
+                                    expanded = false
+                                    onFiltrarLibros()
+                                }
+                            )
+
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "\u2764\uFE0F", // Corazón rojo ❤️
+                                            fontSize = 18.sp,
+                                            modifier = Modifier.padding(end = 8.dp)
+                                        )
+                                        Text("Favoritos")
+                                    }
+                                },
+                                onClick = {
+                                    expanded = false
+                                    onFavoritos()
+                                }
+                            )
+
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "\u2699\uFE0F", // Engranaje ⚙️
+                                            fontSize = 18.sp,
+                                            modifier = Modifier.padding(end = 8.dp)
+                                        )
+                                        Text("Personalización")
+                                    }
+                                },
+                                onClick = {
+                                    expanded = false
+                                    onPersonalizacion()
+                                }
+                            )
+
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "\u2753", // Signo de interrogación negro ❓
+                                            fontSize = 18.sp,
+                                            modifier = Modifier.padding(end = 8.dp)
+                                        )
+                                        Text("Ayuda")
+                                    }
+                                },
+                                onClick = {
+                                    expanded = false
+                                    onAyuda()
+                                }
+                            )
+
+                        }
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+            errorMessage?.let { Text(text = it, color = MaterialTheme.colorScheme.error) }
+
+            libroAEditar?.let { libro ->
+                AlertDialog(
+                    onDismissRequest = { libroAEditar = null },
+                    title = {
+                        Text(
+                            "Modificar libro",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 100.dp, max = 400.dp) // Controla la altura visible
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            OutlinedTextField(
+                                value = tituloEditar,
+                                onValueChange = {
+                                    tituloEditar = it
+                                    tituloError = false
+                                },
+                                label = { Text("Título") },
+                                isError = tituloError,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            if (tituloError) {
+                                Text(
+                                    "El título no puede estar vacío",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+
+                            OutlinedTextField(
+                                value = autorEditar,
+                                onValueChange = {
+                                    autorEditar = it
+                                    autorError = false
+                                },
+                                label = { Text("Autor") },
+                                isError = autorError,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            if (autorError) {
+                                Text(
+                                    "El autor no puede estar vacío",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+
+                            OutlinedTextField(
+                                value = descripcionEditar,
+                                onValueChange = {
+                                    descripcionEditar = it
+                                    descripcionError = false
+                                },
+                                label = { Text("Descripción") },
+                                isError = descripcionError,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            if (descripcionError) {
+                                Text(
+                                    "La descripción no puede estar vacía",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+
+                            OutlinedTextField(
+                                value = urlImagenEditar,
+                                onValueChange = {
+                                    urlImagenEditar = it
+                                    urlImagenError = false
+                                },
+                                label = { Text("URL Imagen") },
+                                isError = urlImagenError,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            if (urlImagenError) {
+                                Text(
+                                    "La URL de la imagen no es válida",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+
+                            OutlinedTextField(
+                                value = urlPdfEditar,
+                                onValueChange = {
+                                    urlPdfEditar = it
+                                    urlPdfError = false
+                                },
+                                label = { Text("URL PDF") },
+                                isError = urlPdfError,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            if (urlPdfError) {
+                                Text(
+                                    "La URL del PDF no es válida",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+
+                            OutlinedTextField(
+                                value = generoEditar,
+                                onValueChange = {
+                                    generoEditar = it
+                                    generoError = false
+                                },
+                                label = { Text("Género") },
+                                isError = generoError,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            if (generoError) {
+                                Text(
+                                    "El género no puede estar vacío",
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                // Validaciones
+                                tituloError = tituloEditar.isBlank()
+                                autorError = autorEditar.isBlank()
+                                descripcionError = descripcionEditar.isBlank()
+                                urlImagenError =
+                                    urlImagenEditar.isBlank() || !Patterns.WEB_URL.matcher(
+                                        urlImagenEditar
+                                    ).matches()
+                                urlPdfError =
+                                    urlPdfEditar.isBlank() || !Patterns.WEB_URL.matcher(urlPdfEditar)
+                                        .matches()
+                                generoError = generoEditar.isBlank()
+
+                                if (!tituloError && !autorError && !descripcionError && !urlImagenError && !urlPdfError && !generoError) {
+                                    scope.launch {
+                                        try {
+                                            val retrofit = Retrofit.Builder()
+                                                .baseUrl("$baseUrl/")
+                                                .addConverterFactory(GsonConverterFactory.create())
+                                                .build()
+                                            val service =
+                                                retrofit.create(ModificarLibroApi::class.java)
+                                            val response = service.modificarLibro(
+                                                libro.copy(
+                                                    Titulo = tituloEditar.trim(),
+                                                    Autor = autorEditar.trim(),
+                                                    Descripcion = descripcionEditar.trim(),
+                                                    UrlImagen = urlImagenEditar.trim(),
+                                                    UrlPdf = urlPdfEditar.trim(),
+                                                    Genero = generoEditar.trim()
+                                                )
+                                            )
+                                            if (response.isSuccessful) {
+                                                libros = libros.map {
+                                                    if (it.Id == libro.Id) it.copy(
+                                                        Titulo = tituloEditar.trim(),
+                                                        Autor = autorEditar.trim(),
+                                                        Descripcion = descripcionEditar.trim(),
+                                                        UrlImagen = urlImagenEditar.trim(),
+                                                        UrlPdf = urlPdfEditar.trim(),
+                                                        Genero = generoEditar.trim()
+                                                    ) else it
+                                                }
+                                                errorMessage = null
+                                                libroAEditar = null
+                                            } else {
+                                                errorMessage = "Error al modificar libro."
+                                            }
+                                        } catch (e: Exception) {
+                                            errorMessage =
+                                                "Error al modificar: ${e.localizedMessage}"
+                                        }
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .defaultMinSize(minWidth = 1.dp, minHeight = 1.dp)
+                                .padding(horizontal = 4.dp)
+                        ) {
+                            Text("Guardar")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { libroAEditar = null },
+                            modifier = Modifier
+                                .defaultMinSize(minWidth = 1.dp, minHeight = 1.dp)
+                                .padding(horizontal = 4.dp)
+                        ) {
+                            Text("Cancelar")
+                        }
+                    }
+                )
+            }
+
+            // Diálogo para eliminar libro (igual que antes)
+            libroAEliminar?.let { libro ->
+                AlertDialog(
+                    onDismissRequest = { libroAEliminar = null },
+                    title = { Text("Confirmar eliminación") },
+                    text = { Text("¿Seguro que quieres eliminar el libro \"${libro.Titulo}\"? Esta acción no se puede deshacer.") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            scope.launch {
+                                try {
+                                    val retrofit = Retrofit.Builder()
+                                        .baseUrl(Constantes.BASE_URL + "/")
+                                        .addConverterFactory(GsonConverterFactory.create())
+                                        .build()
+                                    val service = retrofit.create(EliminarLibroApi::class.java)
+                                    val response = service.eliminarLibro(libro.Id)
+                                    if (response.isSuccessful) {
+                                        libros = libros.filter { it.Id != libro.Id }
+                                        errorMessage = null
+                                    } else {
+                                        errorMessage = "Error al eliminar libro."
+                                    }
+                                } catch (e: Exception) {
+                                    errorMessage = "Error al eliminar: ${e.localizedMessage}"
+                                }
+                                libroAEliminar = null
+                            }
+                        }) {
+                            Text("Eliminar", color = MaterialTheme.colorScheme.error)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { libroAEliminar = null }) {
+                            Text("Cancelar")
+                        }
+                    }
+                )
+            }
+
+            val prefs = context.getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
+            val bgColor = Color(
+                prefs.getFloat("bg_red", 1f),
+                prefs.getFloat("bg_green", 1f),
+                prefs.getFloat("bg_blue", 1f)
+            )
+            val buttonColor = Color(
+                prefs.getFloat("btn_red", 0.38f),
+                prefs.getFloat("btn_green", 0.12f),
+                prefs.getFloat("btn_blue", 0.93f)
+            )
+
+            // Contraste de texto según color de fondo y botón
+            val textColor = getContrastingTextColor(bgColor)
+            val buttonTextColor = getContrastingTextColor(buttonColor)
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(libros) { libro ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        elevation = CardDefaults.cardElevation(4.dp),
+                        colors = CardDefaults.cardColors(containerColor = bgColor)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = libro.Titulo, color = textColor
+                                    )
+                                    val context = LocalContext.current
+                                    var favoritos by remember {
+                                        mutableStateOf(
+                                            obtenerFavoritos(
+                                                context
+                                            ).toMutableSet()
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = {
+                                            alternarFavorito(context, libro.Id.toString())
+                                            favoritos = obtenerFavoritos(context).toMutableSet()
+                                        }
+                                    ) {
+                                        val esFavorito = favoritos.contains(libro.Id.toString())
+                                        if (esFavorito) {
+                                            Icon(
+                                                Icons.Filled.Favorite,
+                                                contentDescription = "Favorito",
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        } else {
+                                            Icon(
+                                                Icons.Outlined.FavoriteBorder,
+                                                contentDescription = "No favorito"
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            Text(
+                                text = "Autor: ${libro.Autor}", color = textColor
+                            )
+                            Text(
+                                text = "Género: ${libro.Genero ?: "Desconocido"}", color = textColor
+                            ) // <-- Agregado
+                            libro.Descripcion?.let {
+                                Text(text = "Descripción: $it", color = textColor)
+                            }
+
+                            libro.Fecha_publicacion?.let {
+                                Text(text = "Fecha de publicación: $it", color = textColor)
+                            }
+
+                            val urlImagen =
+                                libro.UrlImagen?.takeIf { it.isNotBlank() }?.let { ruta ->
+                                    if (ruta.startsWith("http://") || ruta.startsWith("https://")) ruta
+                                    else if (ruta.startsWith("/")) baseUrl + ruta
+                                    else "${Constantes.BASE_URL}/$ruta"
+                                }
+
+                            urlImagen?.let { url ->
+                                AsyncImage(
+                                    model = url,
+                                    contentDescription = "Imagen del libro",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp)
+                                        .padding(top = 8.dp)
+                                )
+                            }
+
+                            val urlPdf = libro.UrlPdf?.takeIf { it.isNotBlank() }?.let { rutaPdf ->
+                                if (rutaPdf.startsWith("http://") || rutaPdf.startsWith("https://")) rutaPdf
+                                else if (rutaPdf.startsWith("/")) baseUrl + rutaPdf
+                                else "${Constantes.BASE_URL}/$rutaPdf"
+                            }
+
+                            urlPdf?.let { rutaPdf ->
+                                Button(
+                                    onClick = {
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(rutaPdf))
+                                        context.startActivity(intent)
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = buttonColor,
+                                        contentColor = buttonTextColor
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 8.dp)
+                                ) {
+                                    Text("Abrir PDF")
+                                }
+                            }
+
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            horizontalArrangement = Arrangement.Center // Centrado horizontal
+                        ) {
+                            Button(
+                                onClick = {
+                                    libroAEditar = libro
+                                    tituloEditar = libro.Titulo
+                                    autorEditar = libro.Autor
+                                    descripcionEditar = libro.Descripcion ?: ""
+                                    urlImagenEditar = libro.UrlImagen ?: ""
+                                    urlPdfEditar = libro.UrlPdf ?: ""
+                                    generoEditar = libro.Genero ?: ""
+
+                                    tituloError = false
+                                    autorError = false
+                                    descripcionError = false
+                                    urlImagenError = false
+                                    urlPdfError = false
+                                    generoError = false
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = buttonColor,
+                                    contentColor = buttonTextColor
+                                ),
+                                modifier = Modifier
+                                    .padding(end = 8.dp)
+                                    .defaultMinSize(minWidth = 150.dp)
+                            ) {
+                                Text("Modificar ✏️")
+                            }
+
+                            Button(
+                                onClick = {
+                                    libroAEliminar = libro
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = buttonColor,         // ← personalizado
+                                    contentColor = buttonTextColor        // ← texto legible
+                                ),
+                                modifier = Modifier
+                                    .defaultMinSize(minWidth = 150.dp)
+                            ) {
+                                Text("Eliminar 🗑️")
+                            }
+
+                        }
+
+                    }
+                }
+            }
+        }
+    }
+}
