@@ -1,0 +1,20 @@
+package com.example.proyectolibros
+
+object Constantes {
+    // IP local del servidor
+    const val BASE_IP = "192.168.1.69"
+
+    // Puerto en el que corre tu servidor (por ejemplo XAMPP o Python HTTP server)
+    const val BASE_URL = "http://$BASE_IP:5001"
+
+    // Endpoints específicos
+    const val URL_OBTENER_LIBROS = "$BASE_URL/ver_libro.php"
+    const val URL_GUARDAR_LIBRO = "$BASE_URL/guardar_libro.php"
+    const val URL_ELIMINAR_LIBRO = "$BASE_URL/eliminar_libro.php"
+    const val URL_MODIFICAR_LIBRO = "$BASE_URL/modificar_libro.php"
+    const val URL_FILTRAR_LIBROS = "$BASE_URL/filtrar_libros.php"
+    const val URL_SINCRONIZAR = "$BASE_URL/sincronizar_mysql_a_sqlite.php"
+    const val URL_VERIFICAR_SINCRONIZACION = "$BASE_URL/verificar_sincronizacion.php"
+
+    // Puedes seguir agregando más rutas si las necesitas
+}

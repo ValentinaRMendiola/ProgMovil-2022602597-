@@ -1,0 +1,14 @@
+package com.example.proyectolibros
+
+data class Libro(
+    val Id: String,
+    val Titulo: String,
+    val Autor: String,
+    val Fecha_publicacion: String?,
+    val UrlImagen: String?,
+    val UrlPdf: String?,
+    val Descripcion: String?,
+    val Genero: String?,
+    val needsSync: Boolean = false, // si debe sincronizarse con el servidor
+    val eliminado: Boolean = false  // si está marcado como eliminado
+)

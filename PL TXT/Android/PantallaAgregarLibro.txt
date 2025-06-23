@@ -1,0 +1,172 @@
+package com.example.proyectolibros
+
+import android.content.ContentValues
+import android.util.Log
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.example.proyectolibros.com.example.proyectolibros.utils.NetworkUtils.hayInternet
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LibroForm(modifier: Modifier = Modifier, onVolver: () -> Unit = {}) {
+    val context = LocalContext.current
+    var titulo by remember { mutableStateOf("") }
+    var autor by remember { mutableStateOf("") }
+    var descripcion by remember { mutableStateOf("") }
+    var fechaPublicacion by remember { mutableStateOf("") }
+    var urlImagen by remember { mutableStateOf("") }
+    var urlPdf by remember { mutableStateOf("") }
+    var genero by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(false) }
+    var mensajeRespuesta by remember { mutableStateOf<String?>(null) }
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(mensajeRespuesta) {
+        mensajeRespuesta?.let {
+            snackbarHostState.showSnackbar(it)
+            mensajeRespuesta = null
+        }
+    }
+
+    BackHandler { onVolver() }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                        Text("Agregar Libro")
+                    }
+                }
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        modifier = modifier
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(16.dp)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedTextField(value = titulo, onValueChange = { titulo = it }, label = { Text("Título") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = autor, onValueChange = { autor = it }, label = { Text("Autor") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = descripcion, onValueChange = { descripcion = it }, label = { Text("Descripción") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = fechaPublicacion, onValueChange = { fechaPublicacion = it }, label = { Text("Fecha publicación (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = urlImagen, onValueChange = { urlImagen = it }, label = { Text("URL Imagen") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = urlPdf, onValueChange = { urlPdf = it }, label = { Text("URL PDF") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = genero, onValueChange = { genero = it }, label = { Text("Género") }, modifier = Modifier.fillMaxWidth())
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(onClick = { onVolver() }, modifier = Modifier.weight(1f)) {
+                    Text("Volver")
+                }
+
+                Button(
+                    onClick = {
+                        if (titulo.isBlank() || autor.isBlank() || fechaPublicacion.isBlank() || genero.isBlank()) {
+                            mensajeRespuesta = "Por favor, completa todos los campos obligatorios."
+                            return@Button
+                        }
+
+                        // Validar URLs
+                        if (!android.util.Patterns.WEB_URL.matcher(urlImagen).matches()) {
+                            mensajeRespuesta = "La URL de la imagen no es válida."
+                            return@Button
+                        }
+
+                        if (!android.util.Patterns.WEB_URL.matcher(urlPdf).matches()) {
+                            mensajeRespuesta = "La URL del PDF no es válida."
+                            return@Button
+                        }
+
+                        isLoading = true
+                        CoroutineScope(Dispatchers.IO).launch {
+                            val db = DBHelper(context)
+                            val idLibro = java.util.UUID.randomUUID().toString().replace("-", "")
+
+                            // Validar duplicado localmente antes de insertar
+                            if (db.libroDuplicado(titulo.trim(), autor.trim(), fechaPublicacion.trim())) {
+                                withContext(Dispatchers.Main) {
+                                    mensajeRespuesta = "Ya existe un libro con el mismo título, autor y fecha de publicación."
+                                    isLoading = false
+                                }
+                                return@launch
+                            }
+
+                            val libro = Libro(
+                                Id = idLibro,
+                                Titulo = titulo.trim(),
+                                Autor = autor.trim(),
+                                Descripcion = descripcion.trim(),
+                                Fecha_publicacion = fechaPublicacion.trim(),
+                                UrlImagen = urlImagen.trim(),
+                                UrlPdf = urlPdf.trim(),
+                                Genero = genero.trim()
+                            )
+
+                            val exitoInsertar = db.insertarLibroOffline(libro)
+                            if (!exitoInsertar) {
+                                withContext(Dispatchers.Main) {
+                                    mensajeRespuesta = "No se pudo guardar porque ya existe un libro con el mismo título, autor y fecha."
+                                    isLoading = false
+                                }
+                                return@launch
+                            }
+
+
+                            var mensaje: String
+
+                            if (hayInternet(context)) {
+                                val exito = db.enviarLibroSuspend(libro)
+                                if (exito) {
+                                    val valores = ContentValues().apply {
+                                        put("pendiente_sync", 0)
+                                    }
+                                    val writable = db.writableDatabase
+                                    writable.update("libros", valores, "Id = ?", arrayOf(libro.Id))
+                                    writable.close()
+                                    mensaje = "Libro guardado correctamente en el servidor"
+                                } else {
+                                    mensaje = "Libro guardado localmente. Error al subir al servidor."
+                                }
+                            } else {
+                                mensaje = "Libro guardado localmente. Se subirá cuando haya conexión."
+                            }
+
+                            withContext(Dispatchers.Main) {
+                                mensajeRespuesta = mensaje
+                                isLoading = false
+                                if (mensaje.contains("correctamente", ignoreCase = true)) {
+                                    onVolver()
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    enabled = !isLoading
+                ) {
+                    Text(if (isLoading) "Guardando..." else "Guardar libro")
+                }
+            }
+        }
+    }
+}

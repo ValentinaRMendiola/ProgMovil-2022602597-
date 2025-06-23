@@ -1,0 +1,256 @@
+package com.example.proyectolibros
+
+import android.content.ContentValues
+import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteOpenHelper
+import android.util.Log
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+
+class DBHelper(context: Context) : SQLiteOpenHelper(context, "mibase", null, 1) {
+
+    override fun onCreate(db: SQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS libros (
+                Id TEXT PRIMARY KEY,
+                Titulo TEXT,
+                Autor TEXT,
+                Descripcion TEXT,
+                UrlImagen TEXT,
+                UrlPdf TEXT,
+                Genero TEXT,
+                Fecha_publicacion TEXT,
+                pendiente_sync INTEGER DEFAULT 0,
+                eliminado INTEGER DEFAULT 0
+            )
+            """.trimIndent()
+        )
+    }
+
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        db.execSQL("DROP TABLE IF EXISTS libros")
+        onCreate(db)
+    }
+
+    private fun arreglarUrl(baseUrl: String, ruta: String?): String? {
+        if (ruta == null || ruta.isBlank()) return null
+        return when {
+            ruta.startsWith("http://") || ruta.startsWith("https://") -> ruta
+            ruta.startsWith("/") -> baseUrl + ruta
+            else -> "$baseUrl/$ruta"
+        }
+    }
+
+    suspend fun sincronizar(context: Context) {
+        try {
+            val retrofit = Retrofit.Builder()
+                .baseUrl("${Constantes.BASE_URL}/")
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+
+            val api = retrofit.create(LibroApi::class.java)
+            val librosRemotos = api.getLibros()
+
+            val db = writableDatabase
+            db.beginTransaction()
+
+            val baseUrl = Constantes.BASE_URL
+
+            for (libro in librosRemotos) {
+                val urlImagenCompleta = arreglarUrl(baseUrl, libro.UrlImagen)
+                val urlPdfCompleta = arreglarUrl(baseUrl, libro.UrlPdf)
+
+                val values = ContentValues().apply {
+                    put("Id", libro.Id)
+                    put("Titulo", libro.Titulo)
+                    put("Autor", libro.Autor)
+                    put("Descripcion", libro.Descripcion)
+                    put("UrlImagen", urlImagenCompleta)
+                    put("UrlPdf", urlPdfCompleta)
+                    put("Genero", libro.Genero)
+                    put("Fecha_publicacion", libro.Fecha_publicacion)
+                    put("pendiente_sync", 0)
+                    put("eliminado", 0)
+                }
+                db.insertWithOnConflict("libros", null, values, SQLiteDatabase.CONFLICT_REPLACE)
+            }
+
+            db.setTransactionSuccessful()
+            db.endTransaction()
+            db.close()
+
+        } catch (e: Exception) {
+            Log.e("DBHelper", "Error al sincronizar: ${e.localizedMessage}")
+        }
+    }
+
+    fun obtenerTodosLosLibros(): List<Libro> {
+        val libros = mutableListOf<Libro>()
+        val db = readableDatabase
+        val cursor = db.rawQuery("SELECT * FROM libros WHERE eliminado = 0", null)
+
+        if (cursor.moveToFirst()) {
+            do {
+                val libro = Libro(
+                    Id = cursor.getString(cursor.getColumnIndexOrThrow("Id")),
+                    Titulo = cursor.getString(cursor.getColumnIndexOrThrow("Titulo")),
+                    Autor = cursor.getString(cursor.getColumnIndexOrThrow("Autor")),
+                    Descripcion = cursor.getString(cursor.getColumnIndexOrThrow("Descripcion")),
+                    UrlImagen = cursor.getString(cursor.getColumnIndexOrThrow("UrlImagen")),
+                    UrlPdf = cursor.getString(cursor.getColumnIndexOrThrow("UrlPdf")),
+                    Genero = cursor.getString(cursor.getColumnIndexOrThrow("Genero")),
+                    Fecha_publicacion = cursor.getString(cursor.getColumnIndexOrThrow("Fecha_publicacion"))
+                )
+                libros.add(libro)
+            } while (cursor.moveToNext())
+        }
+
+        cursor.close()
+        db.close()
+        return libros
+    }
+
+    fun marcarLibroModificado(libro: Libro) {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put("Titulo", libro.Titulo)
+            put("Autor", libro.Autor)
+            put("Descripcion", libro.Descripcion)
+            put("UrlImagen", libro.UrlImagen)
+            put("UrlPdf", libro.UrlPdf)
+            put("Genero", libro.Genero)
+            put("Fecha_publicacion", libro.Fecha_publicacion)
+            put("pendiente_sync", 1)
+        }
+        db.update("libros", values, "Id = ?", arrayOf(libro.Id))
+        db.close()
+    }
+
+    fun marcarLibroEliminado(id: String) {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put("eliminado", 1)
+            put("pendiente_sync", 1)
+        }
+        db.update("libros", values, "Id = ?", arrayOf(id))
+        db.close()
+    }
+
+    suspend fun subirCambiosPendientes(context: Context) {
+        val db = readableDatabase
+        val cursor = db.rawQuery("SELECT * FROM libros WHERE pendiente_sync = 1", null)
+
+        if (cursor.moveToFirst()) {
+            do {
+                val libro = Libro(
+                    Id = cursor.getString(cursor.getColumnIndexOrThrow("Id")),
+                    Titulo = cursor.getString(cursor.getColumnIndexOrThrow("Titulo")),
+                    Autor = cursor.getString(cursor.getColumnIndexOrThrow("Autor")),
+                    Descripcion = cursor.getString(cursor.getColumnIndexOrThrow("Descripcion")),
+                    UrlImagen = cursor.getString(cursor.getColumnIndexOrThrow("UrlImagen")),
+                    UrlPdf = cursor.getString(cursor.getColumnIndexOrThrow("UrlPdf")),
+                    Genero = cursor.getString(cursor.getColumnIndexOrThrow("Genero")),
+                    Fecha_publicacion = cursor.getString(cursor.getColumnIndexOrThrow("Fecha_publicacion"))
+                )
+                val eliminado = cursor.getInt(cursor.getColumnIndexOrThrow("eliminado")) == 1
+
+                val retrofit = Retrofit.Builder()
+                    .baseUrl("${Constantes.BASE_URL}/")
+                    .addConverterFactory(GsonConverterFactory.create())
+                    .build()
+
+                if (eliminado) {
+                    val eliminarApi = retrofit.create(EliminarLibroApi::class.java)
+                    try {
+                        val response = eliminarApi.eliminarLibro(libro.Id)
+                        if (response.isSuccessful) {
+                            val writableDb = writableDatabase
+                            writableDb.delete("libros", "Id = ?", arrayOf(libro.Id))
+                        }
+                    } catch (e: Exception) {
+                        Log.e("DBHelper", "Error eliminando libro remoto: ${e.localizedMessage}")
+                    }
+                } else {
+                    val exito = enviarLibroSuspend(libro)
+                    if (exito) {
+                        val writableDb = writableDatabase
+                        val values = ContentValues().apply {
+                            put("pendiente_sync", 0)
+                            put("eliminado", 0)
+                        }
+                        writableDb.update("libros", values, "Id = ?", arrayOf(libro.Id))
+                    }
+                }
+
+            } while (cursor.moveToNext())
+        }
+
+        cursor.close()
+        db.close()
+    }
+
+    // Usamos OkHttp para POST en suspend (guardar o modificar libro remoto)
+    private val client = OkHttpClient()
+
+    private suspend fun enviarLibroSuspend(libro: Libro): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val url = "${Constantes.BASE_URL}/guardar_libro.php"
+            val json = JSONObject().apply {
+                put("id", libro.Id)
+                put("titulo", libro.Titulo)
+                put("autor", libro.Autor)
+                put("descripcion", libro.Descripcion)
+                put("fecha_publicacion", libro.Fecha_publicacion)
+                put("fecha_modificacion", "${libro.Fecha_publicacion} 00:00:00")
+                put("eliminado", 0)
+                put("url_imagen", libro.UrlImagen)
+                put("url_pdf", libro.UrlPdf)
+                put("genero", libro.Genero)
+            }
+
+            val mediaType = "application/json; charset=utf-8".toMediaTypeOrNull()
+            val body = json.toString().toRequestBody(mediaType)
+
+            val request = Request.Builder()
+                .url(url)
+                .post(body)
+                .build()
+
+            val response = client.newCall(request).execute()
+
+            response.use {
+                return@withContext it.isSuccessful && it.body?.string()?.contains("success", ignoreCase = true) == true
+            }
+        } catch (e: Exception) {
+            Log.e("DBHelper", "Error enviando libro: ${e.localizedMessage}")
+            return@withContext false
+        }
+    }
+
+    fun insertarLibroOffline(libro: Libro) {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put("Id", libro.Id)
+            put("Titulo", libro.Titulo)
+            put("Autor", libro.Autor)
+            put("Descripcion", libro.Descripcion)
+            put("UrlImagen", libro.UrlImagen)
+            put("UrlPdf", libro.UrlPdf)
+            put("Genero", libro.Genero)
+            put("Fecha_publicacion", libro.Fecha_publicacion)
+            put("pendiente_sync", 1)
+            put("eliminado", 0)
+        }
+        db.insert("libros", null, values)
+        db.close()
+    }
+}

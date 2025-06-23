@@ -1,0 +1,303 @@
+package com.example.proyectolibros
+
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import com.example.proyectolibros.com.example.proyectolibros.utils.NetworkUtils.hayInternet
+import kotlinx.coroutines.launch
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.http.GET
+import retrofit2.http.Query
+
+interface LibroFiltroApi {
+    @GET("filtrar_libros.php")
+    suspend fun getLibros(
+        @Query("titulo") titulo: String,
+        @Query("autor") autor: String,
+        @Query("genero") genero: String
+    ): List<Libro>
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PantallaFiltrarLibros(onVolver: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var libros by remember { mutableStateOf<List<Libro>>(emptyList()) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    var filtroTitulo by remember { mutableStateOf(TextFieldValue("")) }
+    var filtroAutor by remember { mutableStateOf(TextFieldValue("")) }
+    var filtroGenero by remember { mutableStateOf(TextFieldValue("")) }
+    var barraBusqueda by remember { mutableStateOf(TextFieldValue("")) }
+    var busquedaRealizada by remember { mutableStateOf(false) }
+
+    val baseUrl = Constantes.BASE_URL
+
+    BackHandler {
+        onVolver()
+    }
+
+    fun cargarLibrosFiltrados() {
+        scope.launch {
+            val db = DBHelper(context)
+            val librosLocales = db.obtenerTodosLosLibros()
+
+            // Filtrar libros locales con todos los campos
+            val librosLocalesFiltrados = librosLocales.filter { libro ->
+                val coincideTitulo = filtroTitulo.text.isBlank() || libro.Titulo.contains(filtroTitulo.text.trim(), ignoreCase = true)
+                val coincideAutor = filtroAutor.text.isBlank() || libro.Autor.contains(filtroAutor.text.trim(), ignoreCase = true)
+                val coincideGenero = filtroGenero.text.isBlank() || (libro.Genero?.contains(filtroGenero.text.trim(), ignoreCase = true) ?: false)
+                coincideTitulo && coincideAutor && coincideGenero
+            }
+
+            val librosRemotos = if (hayInternet(context)) {
+                try {
+                    val retrofit = Retrofit.Builder()
+                        .baseUrl("$baseUrl/")
+                        .addConverterFactory(GsonConverterFactory.create())
+                        .build()
+                    val api = retrofit.create(LibroFiltroApi::class.java)
+                    val librosApi = api.getLibros(
+                        filtroTitulo.text.trim(),
+                        filtroAutor.text.trim(),
+                        filtroGenero.text.trim()
+                    )
+                    errorMessage = null
+                    librosApi
+                } catch (e: Exception) {
+                    errorMessage = "Error al cargar libros en línea: ${e.localizedMessage}"
+                    emptyList()
+                }
+            } else {
+                errorMessage = ""
+                emptyList()
+            }
+
+            // Unir libros sin duplicados por ID
+            val combinados = (librosRemotos + librosLocalesFiltrados)
+                .distinctBy { it.Id }
+
+            libros = combinados
+            busquedaRealizada = true
+        }
+    }
+
+    fun limpiarBusqueda() {
+        filtroTitulo = TextFieldValue("")
+        filtroAutor = TextFieldValue("")
+        filtroGenero = TextFieldValue("")
+        barraBusqueda = TextFieldValue("")
+        libros = emptyList()
+        errorMessage = null
+        busquedaRealizada = false
+    }
+
+    val librosFiltrados = libros.filter {
+        val query = barraBusqueda.text.trim().lowercase()
+        it.Titulo.lowercase().contains(query) ||
+                it.Autor.lowercase().contains(query) ||
+                (it.Genero ?: "").lowercase().contains(query)
+    }
+
+    val hayBusqueda = filtroTitulo.text.isNotBlank() ||
+            filtroAutor.text.isNotBlank() ||
+            filtroGenero.text.isNotBlank() ||
+            barraBusqueda.text.isNotBlank()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text("Búsqueda", style = MaterialTheme.typography.titleLarge)
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onVolver) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Volver")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            contentPadding = PaddingValues(bottom = 32.dp)
+        ) {
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text("Buscar:", style = MaterialTheme.typography.titleMedium)
+
+                OutlinedTextField(
+                    value = barraBusqueda,
+                    onValueChange = { barraBusqueda = it },
+                    label = { Text("Buscar título, autor o género") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text("Filtros:", style = MaterialTheme.typography.titleMedium)
+
+                OutlinedTextField(
+                    value = filtroTitulo,
+                    onValueChange = { filtroTitulo = it },
+                    label = { Text("Filtrar por Título") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = filtroAutor,
+                    onValueChange = { filtroAutor = it },
+                    label = { Text("Filtrar por Autor") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                )
+
+                OutlinedTextField(
+                    value = filtroGenero,
+                    onValueChange = { filtroGenero = it },
+                    label = { Text("Filtrar por Género") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { limpiarBusqueda() },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Clear, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Limpiar")
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Button(
+                        onClick = { cargarLibrosFiltrados() },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Default.Search, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Buscar")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+
+            if (errorMessage != null) {
+                item {
+                    Text(
+                        text = errorMessage ?: "",
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+            }
+
+            if (busquedaRealizada && librosFiltrados.isEmpty() && hayBusqueda) {
+                item {
+                    Text("No se encontraron libros que coincidan.", modifier = Modifier.padding(vertical = 8.dp))
+                }
+            } else {
+                items(librosFiltrados) { libro ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        elevation = CardDefaults.cardElevation(4.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(text = libro.Titulo, style = MaterialTheme.typography.headlineSmall)
+                            Text(text = "Autor: ${libro.Autor}", style = MaterialTheme.typography.bodyMedium)
+                            Text(text = "Género: ${libro.Genero ?: "Desconocido"}", style = MaterialTheme.typography.bodyMedium)
+
+                            libro.Descripcion?.let {
+                                Text(
+                                    text = it,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(top = 6.dp)
+                                )
+                            }
+
+                            libro.Fecha_publicacion?.let {
+                                Text(
+                                    text = "Fecha: $it",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+
+                            val urlImagen = libro.UrlImagen?.takeIf { it.isNotBlank() }?.let { ruta ->
+                                if (ruta.startsWith("http://") || ruta.startsWith("https://")) ruta
+                                else if (ruta.startsWith("/")) baseUrl + ruta
+                                else "$baseUrl/$ruta"
+                            }
+
+                            urlImagen?.let { url ->
+                                AsyncImage(
+                                    model = url,
+                                    contentDescription = "Imagen del libro",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(200.dp)
+                                        .padding(top = 8.dp)
+                                )
+                            }
+
+                            val urlPdf = libro.UrlPdf?.takeIf { it.isNotBlank() }?.let { rutaPdf ->
+                                if (rutaPdf.startsWith("http://") || rutaPdf.startsWith("https://")) rutaPdf
+                                else if (rutaPdf.startsWith("/")) baseUrl + rutaPdf
+                                else "$baseUrl/$rutaPdf"
+                            }
+
+                            urlPdf?.let { rutaPdf ->
+                                Button(
+                                    onClick = {
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(rutaPdf))
+                                        context.startActivity(intent)
+                                    },
+                                    modifier = Modifier.padding(top = 8.dp)
+                                ) {
+                                    Text("Ver PDF")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
